@@ -891,7 +891,7 @@ function renderCashflow() {
         const cf = getCashflow(b)
         const charges = b.credit + (b.tf||0)/12 + (b.assurance||0) + (b.charges||0)
         return `<tr style="border-top:0.5px solid var(--border)">
-          <td style="padding:9px 0;font-weight:500">${b.nom.split('—')[0].trim()}</td>
+          <td style="padding:9px 0;font-weight:500">${b.nom}</td>
           <td style="padding:9px 0;text-align:right;color:var(--green)">${b.loyers > 0 ? fmt(b.loyers) : '—'}</td>
           <td style="padding:9px 0;text-align:right;color:var(--red)">${fmt(charges)}</td>
           <td style="padding:9px 0;text-align:right;font-weight:600;color:${cf>=0?'var(--green)':'var(--red)'}">${cf>=0?'+':''}${fmt(cf)}</td>
