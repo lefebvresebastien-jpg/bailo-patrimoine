@@ -621,6 +621,7 @@ const _data = {
 }
 
 function fmt(n) { return new Intl.NumberFormat('fr-FR').format(Math.round(n)) + ' €' }
+function fmtPdf(n) { return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' €' }
 function fmtPct(n) { return Math.round(n * 10) / 10 + ' %' }
 
 function getCashflow(b) {
@@ -1247,21 +1248,21 @@ function exporterPDF() {
 
   doc.setFontSize(13); doc.setFont(undefined, 'bold'); doc.setTextColor(0)
   doc.text('Patrimoine immobilier', 20, y); y += 10
-  _data.biens.forEach(b => add(b.nom, fmt(b.valeur_estimee)))
-  add('Total actifs', fmt(getValeurTotale()), true); y += 5
+  _data.biens.forEach(b => add(b.nom, fmtPdf(b.valeur_estimee)))
+  add('Total actifs', fmtPdf(getValeurTotale()), true); y += 5
   doc.line(20, y, 190, y); y += 8
 
   doc.text('Revenus locatifs', 20, y); y += 10
-  add('Loyers bruts / mois', fmt(getTotalLoyers()))
-  add('Charges / mois', fmt(getTotalCharges()))
+  add('Loyers bruts / mois', fmtPdf(getTotalLoyers()))
+  add('Charges / mois', fmtPdf(getTotalCharges()))
   const cf = _data.biens.filter(b => b.type !== 'rp').reduce((s, b) => s + getCashflow(b), 0)
-  add('Cash-flow net / mois', (cf >= 0 ? '+' : '') + fmt(cf), true); y += 5
+  add('Cash-flow net / mois', (cf >= 0 ? '+' : '') + fmtPdf(cf), true); y += 5
   doc.line(20, y, 190, y); y += 8
 
   doc.text('Indicateurs bancaires', 20, y); y += 10
   add('Taux d\'endettement', fmtPct(getTauxEndettement()))
   add('Rendement brut global', fmtPct(getRendement()))
-  add('Patrimoine net estimé', fmt(getPatrimoineNet()), true)
+  add('Patrimoine net estimé', fmtPdf(getPatrimoineNet()), true)
 
   y += 10
   doc.setFontSize(9); doc.setTextColor(150)
