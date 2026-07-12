@@ -9,6 +9,12 @@ const USERNAME = 'bailo';
 const PASSWORD = 'ChangeMoi2026!'; // À changer par Sébastien après activation
 
 export default async (request, context) => {
+  const url = new URL(request.url);
+
+  if (url.pathname.startsWith('/.netlify/functions/')) {
+    return context.next();
+  }
+
   const auth = request.headers.get('authorization');
   const expected = 'Basic ' + btoa(`${USERNAME}:${PASSWORD}`);
 
