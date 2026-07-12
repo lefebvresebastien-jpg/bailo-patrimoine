@@ -611,6 +611,7 @@ const _data = {
   train_vie: 0
 }
 let _gestionProperties = [] // liste brute des biens Gestion (pont via fonction serveur)
+let _loyersParBien = {} // loyers mensuels réels par property_id (calculés depuis les baux)
 let _currentUserId = null
 
 async function loadPatrimoineData(user) {
@@ -624,7 +625,8 @@ async function loadPatrimoineData(user) {
     })
     const json = await res.json()
     _gestionProperties = json.properties || []
-  } catch (e) { _gestionProperties = [] }
+    _loyersParBien = json.loyersParBien || {}
+  } catch (e) { _gestionProperties = []; _loyersParBien = {} }
 
   // 2. Récupérer les infos patrimoniales complémentaires déjà saisies
   const { data: detailsData } = await db.from('patrimoine_details').select('*')
@@ -654,7 +656,7 @@ async function loadPatrimoineData(user) {
       valeur_achat: d?.valeur_achat || 0,
       valeur_estimee: d?.valeur_estimee || 0,
       annee_achat: d?.annee_achat || null,
-      loyers: 0, // synchronisé séparément si besoin (voir backlog)
+      loyers: _loyersParBien[p.id] || 0,
       credit: d?.credit || 0,
       tf: d?.tf || 0,
       assurance: d?.assurance || 0,
