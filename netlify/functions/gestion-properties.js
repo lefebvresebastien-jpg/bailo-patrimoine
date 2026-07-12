@@ -66,7 +66,35 @@ exports.handler = async (event) => {
     );
     console.log('gestion-properties: propsRes status', propsRes.status, 'body', JSON.stringify(propsRes.body).slice(0,300));
 
-    return { statusCode: 200, headers: cors, body: JSON.stringify({ properties: Array.isArray(propsRes.body) ? propsRes.body : [] }) };
+    // Récupérer les loyers réels (stockés dans leases.data.formData.rent,
+    // reliés aux biens via units.property_id) pour calculer un vrai
+    // cash-flow — auparavant toujours à 0, corrigé le 12/07/2026.
+    const properties = Array.isArray(propsRes.body) ? propsRes.body : [];
+    let loyersParBien = {};
+    if (properties.length > 0) {
+      const propIds = properties.map(p => p.id).join(',');
+      const unitsRes = await request('GET',
+        GESTION_URL + '/rest/v1/units?property_id=in.(' + propIds + ')&select=id,property_id',
+        svcHeaders
+      );
+      const units = Array.isArray(unitsRes.body) ? unitsRes.body : [];
+      const unitToProperty = {};
+      units.forEach(u => { unitToProperty[u.id] = u.property_id; });
+
+      const leasesRes = await request('GET',
+        GESTION_URL + '/rest/v1/leases?bailleur_id=eq.' + encodeURIComponent(gestionUser.id) + '&select=unit_id,data',
+        svcHeaders
+      );
+      const leases = Array.isArray(leasesRes.body) ? leasesRes.body : [];
+      leases.forEach(l => {
+        const propId = unitToProperty[l.unit_id];
+        if (!propId) return;
+        const rent = parseFloat(l.data?.formData?.rent) || 0;
+        loyersParBien[propId] = (loyersParBien[propId] || 0) + rent;
+      });
+    }
+
+    return { statusCode: 200, headers: cors, body: JSON.stringify({ properties, loyersParBien }) };
   } catch (e) {
     return { statusCode: 200, headers: cors, body: JSON.stringify({ properties: [], error: e.message }) };
   }
