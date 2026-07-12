@@ -381,6 +381,10 @@ input, select, textarea { font-family: var(--font); }
 
         <!-- BIENS -->
         <div class="page" id="page-biens">
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:14px">
+            <button class="btn btn-secondary" onclick="openProfilModal()">👤 Mon profil</button>
+            <button class="btn btn-primary" onclick="openBienModal(null)">+ Bien personnel</button>
+          </div>
           <div id="biens-detail-list"></div>
         </div>
 
@@ -596,28 +600,181 @@ const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages'
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
 const dbGestion = supabase.createClient(GESTION_URL, GESTION_KEY)
 
-// Données patrimoniales
+// Données patrimoniales — chargées dynamiquement depuis Supabase après
+// connexion (voir loadPatrimoineData). Cette structure était auparavant
+// codée en dur avec de vraies données personnelles (adresses, valeurs,
+// crédits), visibles dans le fichier source par n'importe qui, avant même
+// la moindre connexion — corrigé le 12/07/2026.
 const _data = {
-  biens: [
-    { id: 1, nom: 'SCI LEFAAL — Fresnicourt', adresse: '54 BIS rue de Fresnicourt, 62620 Barlin', type: 'sci', lots: 4,
-      valeur_achat: 280000, valeur_estimee: 390000, annee_achat: 2015,
-      loyers: 3249, credit: 1000, tf: 1900/12, assurance: 150, charges: 50, duree_credit_restante: 10,
-      color: '#6c63ff', icon: 'ti-building-skyscraper' },
-    { id: 2, nom: 'SCI LEFAAL — Dr Capiaux', adresse: '5/7 rue du Docteur Capiaux', type: 'sci', lots: 5,
-      valeur_achat: 380000, valeur_estimee: 300000, annee_achat: 2018,
-      loyers: 2820, credit: 1000, tf: 2200/12, assurance: 60, charges: 0, duree_credit_restante: 20,
-      color: '#34d399', icon: 'ti-building-community' },
-    { id: 3, nom: 'Saint-Pol-sur-Ternoise', adresse: 'Saint-Pol-sur-Ternoise', type: 'perso', lots: 1,
-      valeur_achat: 110000, valeur_estimee: 140000, annee_achat: 2019,
-      loyers: 650, credit: 530, tf: 1000/12, assurance: 50, charges: 0, duree_credit_restante: 18,
-      color: '#fbbf24', icon: 'ti-home' },
-    { id: 4, nom: 'Résidence principale', adresse: 'Barlin', type: 'rp', lots: 0,
-      valeur_achat: 320000, valeur_estimee: 480000, annee_achat: 2010,
-      loyers: 0, credit: 1280, tf: 0, assurance: 0, charges: 0, duree_credit_restante: 18,
-      color: '#9ca3af', icon: 'ti-home-2' }
-  ],
-  revenus_perso: { salaire: 1460, autre: 1000 },
-  train_vie: 5000
+  biens: [],
+  revenus_perso: { salaire: 0, autre: 0 },
+  train_vie: 0
+}
+let _gestionProperties = [] // liste brute des biens Gestion (pont via fonction serveur)
+let _currentUserId = null
+
+async function loadPatrimoineData(user) {
+  _currentUserId = user.id
+
+  // 1. Récupérer la liste des biens Gestion (pont, sessions Auth séparées)
+  const sess = (await db.auth.getSession()).data.session
+  try {
+    const res = await fetch('/.netlify/functions/gestion-properties', {
+      headers: { 'Authorization': 'Bearer ' + (sess ? sess.access_token : '') }
+    })
+    const json = await res.json()
+    _gestionProperties = json.properties || []
+  } catch (e) { _gestionProperties = [] }
+
+  // 2. Récupérer les infos patrimoniales complémentaires déjà saisies
+  const { data: detailsData } = await db.from('patrimoine_details').select('*')
+  const details = detailsData || []
+
+  // 3. Récupérer le profil perso (revenus, train de vie)
+  const { data: profilData } = await db.from('patrimoine_profil').select('*').maybeSingle()
+  if (profilData) {
+    _data.revenus_perso.salaire = profilData.salaire || 0
+    _data.revenus_perso.autre = profilData.autre_revenu || 0
+    _data.train_vie = profilData.train_vie || 0
+  }
+
+  // 4. Construire _data.biens : un bien Gestion + ses infos complémentaires
+  //    (si elles existent), plus les biens saisis uniquement dans
+  //    Patrimoine (résidence principale, etc. — property_id vide).
+  const biens = []
+  _gestionProperties.forEach(p => {
+    const d = details.find(x => x.property_id === p.id)
+    biens.push({
+      id: p.id,
+      property_id: p.id,
+      nom: p.name || p.address || 'Bien sans nom',
+      adresse: [p.address, p.postal_code, p.city].filter(Boolean).join(', '),
+      type: d?.type || 'sci',
+      lots: 1,
+      valeur_achat: d?.valeur_achat || 0,
+      valeur_estimee: d?.valeur_estimee || 0,
+      annee_achat: d?.annee_achat || null,
+      loyers: 0, // synchronisé séparément si besoin (voir backlog)
+      credit: d?.credit || 0,
+      tf: d?.tf || 0,
+      assurance: d?.assurance || 0,
+      charges: d?.charges || 0,
+      duree_credit_restante: d?.duree_credit_restante || 0,
+      color: d?.color || '#6c63ff',
+      icon: d?.icon || 'ti-building-skyscraper',
+      _detailId: d?.id || null,
+      _incomplet: !d
+    })
+  })
+  details.filter(d => !d.property_id).forEach(d => {
+    biens.push({
+      id: d.id, property_id: null, nom: d.nom || 'Bien personnel', adresse: d.adresse || '',
+      type: d.type || 'rp', lots: 0,
+      valeur_achat: d.valeur_achat || 0, valeur_estimee: d.valeur_estimee || 0, annee_achat: d.annee_achat,
+      loyers: 0, credit: d.credit || 0, tf: d.tf || 0, assurance: d.assurance || 0, charges: d.charges || 0,
+      duree_credit_restante: d.duree_credit_restante || 0, color: d.color || '#9ca3af', icon: d.icon || 'ti-home-2',
+      _detailId: d.id, _incomplet: false
+    })
+  })
+  _data.biens = biens
+}
+
+async function savePatrimoineDetail(payload) {
+  payload.user_id = _currentUserId
+  payload.updated_at = new Date().toISOString()
+  const { error } = await db.from('patrimoine_details').upsert(payload)
+  return !error
+}
+
+async function savePatrimoineProfil() {
+  const { error } = await db.from('patrimoine_profil').upsert({
+    user_id: _currentUserId,
+    salaire: _data.revenus_perso.salaire,
+    autre_revenu: _data.revenus_perso.autre,
+    train_vie: _data.train_vie,
+    updated_at: new Date().toISOString()
+  })
+  return !error
+}
+
+// MODALE BIEN
+let _bienModalTarget = null // id du bien en cours d'édition, ou null pour un nouveau bien personnel
+
+function openBienModal(bienId) {
+  const b = bienId ? _data.biens.find(x => x.id === bienId) : null
+  _bienModalTarget = b || { property_id: null, _detailId: null }
+  const isGestionBien = !!(_bienModalTarget.property_id)
+
+  document.getElementById('bien-modal-title').textContent = b ? 'Modifier — ' + b.nom : 'Ajouter un bien personnel'
+  document.getElementById('bien-modal-nom-wrap').style.display = isGestionBien ? 'none' : 'block'
+  document.getElementById('bien-modal-adresse-wrap').style.display = isGestionBien ? 'none' : 'block'
+  document.getElementById('bien-modal-nom').value = b?.nom || ''
+  document.getElementById('bien-modal-adresse').value = b?.adresse || ''
+  document.getElementById('bien-modal-type').value = b?.type || (isGestionBien ? 'sci' : 'rp')
+  document.getElementById('bien-modal-valeur-achat').value = b?.valeur_achat || ''
+  document.getElementById('bien-modal-valeur-estimee').value = b?.valeur_estimee || ''
+  document.getElementById('bien-modal-annee').value = b?.annee_achat || ''
+  document.getElementById('bien-modal-duree-credit').value = b?.duree_credit_restante || ''
+  document.getElementById('bien-modal-credit').value = b?.credit || ''
+  document.getElementById('bien-modal-tf').value = b?.tf || ''
+  document.getElementById('bien-modal-assurance').value = b?.assurance || ''
+  document.getElementById('bien-modal-charges').value = b?.charges || ''
+  document.getElementById('bien-modal').style.display = 'flex'
+}
+
+function closeBienModal() {
+  document.getElementById('bien-modal').style.display = 'none'
+  _bienModalTarget = null
+}
+
+async function saveBienModal() {
+  const isGestionBien = !!(_bienModalTarget && _bienModalTarget.property_id)
+  const payload = {
+    id: _bienModalTarget?._detailId || undefined,
+    property_id: isGestionBien ? _bienModalTarget.property_id : null,
+    nom: isGestionBien ? null : document.getElementById('bien-modal-nom').value.trim(),
+    adresse: isGestionBien ? null : document.getElementById('bien-modal-adresse').value.trim(),
+    type: document.getElementById('bien-modal-type').value,
+    valeur_achat: parseFloat(document.getElementById('bien-modal-valeur-achat').value) || 0,
+    valeur_estimee: parseFloat(document.getElementById('bien-modal-valeur-estimee').value) || 0,
+    annee_achat: parseInt(document.getElementById('bien-modal-annee').value) || null,
+    duree_credit_restante: parseInt(document.getElementById('bien-modal-duree-credit').value) || 0,
+    credit: parseFloat(document.getElementById('bien-modal-credit').value) || 0,
+    tf: parseFloat(document.getElementById('bien-modal-tf').value) || 0,
+    assurance: parseFloat(document.getElementById('bien-modal-assurance').value) || 0,
+    charges: parseFloat(document.getElementById('bien-modal-charges').value) || 0
+  }
+  if (!payload.id) delete payload.id
+  const ok = await savePatrimoineDetail(payload)
+  if (!ok) { showToast('Erreur lors de l\'enregistrement'); return }
+  closeBienModal()
+  const { data: { session } } = await db.auth.getSession()
+  await loadPatrimoineData(session.user)
+  renderDashboard()
+  showToast('Bien enregistré')
+}
+
+// MODALE PROFIL
+function openProfilModal() {
+  document.getElementById('profil-modal-salaire').value = _data.revenus_perso.salaire || ''
+  document.getElementById('profil-modal-autre').value = _data.revenus_perso.autre || ''
+  document.getElementById('profil-modal-train-vie').value = _data.train_vie || ''
+  document.getElementById('profil-modal').style.display = 'flex'
+}
+
+function closeProfilModal() {
+  document.getElementById('profil-modal').style.display = 'none'
+}
+
+async function saveProfilModal() {
+  _data.revenus_perso.salaire = parseFloat(document.getElementById('profil-modal-salaire').value) || 0
+  _data.revenus_perso.autre = parseFloat(document.getElementById('profil-modal-autre').value) || 0
+  _data.train_vie = parseFloat(document.getElementById('profil-modal-train-vie').value) || 0
+  const ok = await savePatrimoineProfil()
+  if (!ok) { showToast('Erreur lors de l\'enregistrement'); return }
+  closeProfilModal()
+  renderDashboard()
+  showToast('Profil enregistré')
 }
 
 function fmt(n) { return new Intl.NumberFormat('fr-FR').format(Math.round(n)) + ' €' }
@@ -838,6 +995,7 @@ function renderBiens() {
         <div style="display:flex;gap:8px">
           ${b.type !== 'rp' ? `<span style="font-size:12px;padding:4px 10px;border-radius:99px;background:${cf>=0?'rgba(52,211,153,.1)':'rgba(248,113,113,.1)'};color:${cf>=0?'var(--green)':'var(--red)'}">CF ${cf>=0?'+':''}${fmt(cf)}/mois</span>` : ''}
           ${b.type !== 'rp' ? `<span style="font-size:12px;padding:4px 10px;border-radius:99px;background:rgba(108,99,255,.1);color:#a5b4fc">Rdt ${rendement} %</span>` : ''}
+          <span onclick="openBienModal('${b.id}')" style="font-size:12px;padding:4px 10px;border-radius:99px;background:var(--surface2);color:var(--muted2);cursor:pointer;border:0.5px solid var(--border)">✎ Modifier</span>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
@@ -1293,14 +1451,19 @@ async function login() {
 
 async function initApp(user) {
   document.getElementById('auth-screen').style.display = 'none'
-  document.getElementById('loading-screen').style.display = 'none'
   document.getElementById('app').style.display = 'block'
   document.getElementById('user-name').textContent = user.email
+  document.getElementById('loading-screen').style.display = 'flex'
+  document.getElementById('loading-screen').textContent = 'Chargement de vos données...'
+  await loadPatrimoineData(user)
+  document.getElementById('loading-screen').style.display = 'none'
   renderDashboard()
   showToast('Bienvenue sur Bailo Patrimoine')
 }
 
-function refreshData() {
+async function refreshData() {
+  const { data: { session } } = await db.auth.getSession()
+  if (session) { await loadPatrimoineData(session.user) }
   showToast('Données actualisées')
   renderDashboard()
 }
@@ -1314,6 +1477,98 @@ async function init() {
 
 init()
 </script>
+
+<!-- MODALE ÉDITION BIEN — ajoutée le 12/07/2026, remplace l'absence totale
+     de formulaire d'édition (les données étaient auparavant codées en dur,
+     jamais saisies par l'utilisateur). -->
+<div id="bien-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);align-items:center;justify-content:center;padding:20px">
+  <div style="width:100%;max-width:480px;max-height:90vh;overflow-y:auto;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius);padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:16px;font-weight:600" id="bien-modal-title">Infos patrimoniales</div>
+      <div style="cursor:pointer;color:var(--muted)" onclick="closeBienModal()">✕</div>
+    </div>
+    <div id="bien-modal-nom-wrap" style="margin-bottom:12px">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Nom du bien</label>
+      <input id="bien-modal-nom" class="auth-input" style="margin-bottom:0">
+    </div>
+    <div id="bien-modal-adresse-wrap" style="margin-bottom:12px">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Adresse</label>
+      <input id="bien-modal-adresse" class="auth-input" style="margin-bottom:0">
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Type</label>
+      <select id="bien-modal-type" class="auth-input" style="margin-bottom:0">
+        <option value="sci">Locatif (SCI)</option>
+        <option value="perso">Locatif (nom propre)</option>
+        <option value="rp">Résidence principale</option>
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Prix d'achat (€)</label>
+        <input id="bien-modal-valeur-achat" type="number" class="auth-input" style="margin-bottom:0">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Valeur estimée (€)</label>
+        <input id="bien-modal-valeur-estimee" type="number" class="auth-input" style="margin-bottom:0">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Année d'achat</label>
+        <input id="bien-modal-annee" type="number" class="auth-input" style="margin-bottom:0">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Crédit restant (années)</label>
+        <input id="bien-modal-duree-credit" type="number" class="auth-input" style="margin-bottom:0">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Mensualité crédit (€/mois)</label>
+        <input id="bien-modal-credit" type="number" class="auth-input" style="margin-bottom:0">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Taxe foncière (€/mois)</label>
+        <input id="bien-modal-tf" type="number" class="auth-input" style="margin-bottom:0">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Assurance (€/mois)</label>
+        <input id="bien-modal-assurance" type="number" class="auth-input" style="margin-bottom:0">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Autres charges (€/mois)</label>
+        <input id="bien-modal-charges" type="number" class="auth-input" style="margin-bottom:0">
+      </div>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="saveBienModal()">Enregistrer</button>
+  </div>
+</div>
+
+<!-- MODALE PROFIL PERSO -->
+<div id="profil-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);align-items:center;justify-content:center;padding:20px">
+  <div style="width:100%;max-width:400px;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius);padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:16px;font-weight:600">Mon profil</div>
+      <div style="cursor:pointer;color:var(--muted)" onclick="closeProfilModal()">✕</div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Salaire net / mois (€)</label>
+      <input id="profil-modal-salaire" type="number" class="auth-input" style="margin-bottom:0">
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Autres revenus / mois (€)</label>
+      <input id="profil-modal-autre" type="number" class="auth-input" style="margin-bottom:0">
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Train de vie / mois (€)</label>
+      <input id="profil-modal-train-vie" type="number" class="auth-input" style="margin-bottom:0">
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="saveProfilModal()">Enregistrer</button>
+  </div>
+</div>
 
 </body>
 </html>
