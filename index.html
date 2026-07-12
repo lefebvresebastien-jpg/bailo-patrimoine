@@ -1330,10 +1330,11 @@ PROBLÈMES IDENTIFIÉS :
 Donne exactement 5 recommandations numérotées, chacune avec : un titre court, une explication de 2-3 phrases, et une action concrète à faire dans les 30 jours. Sois direct et précis. Format : [TITRE] [EXPLICATION] [ACTION 30J].`
 
   try {
-    const resp = await fetch(ANTHROPIC_ENDPOINT, {
+    const sess = (await db.auth.getSession()).data.session
+    const resp = await fetch('/.netlify/functions/ai-analysis', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (sess ? sess.access_token : '') },
+      body: JSON.stringify({ prompt })
     })
     const data = await resp.json()
     const text = data.content?.[0]?.text || ''
