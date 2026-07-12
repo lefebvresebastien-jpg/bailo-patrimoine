@@ -50,13 +50,15 @@ exports.handler = async (event) => {
     }
 
     const svcHeaders = { apikey: GESTION_SERVICE_KEY, Authorization: 'Bearer ' + GESTION_SERVICE_KEY };
-    const listRes = await request('GET', GESTION_URL + '/auth/v1/admin/users?email=' + encodeURIComponent(email), svcHeaders);
-    console.log('gestion-properties: listRes status', listRes.status, 'body', JSON.stringify(listRes.body).slice(0,300));
-    const gestionUser = listRes.body?.users?.[0] || (Array.isArray(listRes.body) ? listRes.body[0] : null);
+    const listRes = await request('GET', GESTION_URL + '/auth/v1/admin/users?per_page=1000', svcHeaders);
+    console.log('gestion-properties: listRes status', listRes.status, 'nb users', listRes.body?.users?.length);
+    const allUsers = listRes.body?.users || (Array.isArray(listRes.body) ? listRes.body : []);
+    const gestionUser = allUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
     if (!gestionUser?.id) {
-      console.log('gestion-properties: aucun utilisateur Gestion trouve pour cet email');
+      console.log('gestion-properties: aucun utilisateur Gestion trouve pour cet email', email);
       return { statusCode: 200, headers: cors, body: JSON.stringify({ properties: [] }) };
     }
+    console.log('gestion-properties: gestionUser trouve', gestionUser.id);
 
     const propsRes = await request('GET',
       GESTION_URL + '/rest/v1/properties?bailleur_id=eq.' + encodeURIComponent(gestionUser.id) + '&select=id,name,type,address,city,postal_code',
