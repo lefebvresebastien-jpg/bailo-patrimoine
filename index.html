@@ -613,9 +613,11 @@ const _data = {
 let _gestionProperties = [] // liste brute des biens Gestion (pont via fonction serveur)
 let _loyersParBien = {} // loyers mensuels réels par property_id (calculés depuis les baux)
 let _currentUserId = null
+let _currentUserEmail = ''
 
 async function loadPatrimoineData(user) {
   _currentUserId = user.id
+  _currentUserEmail = user.email || ''
 
   // 1. Récupérer la liste des biens Gestion (pont, sessions Auth séparées)
   const sess = (await db.auth.getSession()).data.session
@@ -1352,8 +1354,7 @@ function renderRapport() {
   document.getElementById('rapport-content').innerHTML = `
     <div class="rapport-section">
       <div class="rapport-section-title">Identité du demandeur</div>
-      <div class="rapport-row"><span class="rapport-row-label">Nom</span><span class="rapport-row-val">LEFEBVRE Sébastien</span></div>
-      <div class="rapport-row"><span class="rapport-row-label">Société</span><span class="rapport-row-val">SCI LEFAAL</span></div>
+      <div class="rapport-row"><span class="rapport-row-label">Compte</span><span class="rapport-row-val">${_currentUserEmail || '—'}</span></div>
       <div class="rapport-row"><span class="rapport-row-label">Date</span><span class="rapport-row-val">${new Date().toLocaleDateString('fr-FR')}</span></div>
     </div>
     <div class="rapport-section">
