@@ -1321,11 +1321,7 @@ PROFIL INVESTISSEUR :
 BIENS :
 ${_data.biens.map(b => `- ${b.nom} : valeur ${fmt(b.valeur_estimee)}, loyers ${fmt(b.loyers)}/mois, cf ${fmt(getCashflow(b))}/mois, crédit ${fmt(b.credit)}/mois encore ${b.duree_credit_restante} ans`).join('\n')}
 
-PROBLÈMES IDENTIFIÉS :
-- Saint-Pol cash-flow légèrement négatif (-13€/mois)
-- Taux d'endettement élevé (~58%)
-- Déficit mensuel entre revenus totaux et train de vie (~340€)
-- Résidence principale : 240 000€ de capital mobilisable
+Identifie toi-même les problèmes ou points d'attention à partir des chiffres ci-dessus (cash-flow négatif, endettement élevé, déficit revenus/train de vie, capital mobilisable, etc.), uniquement s'ils sont réellement présents dans ce profil.
 
 Donne exactement 5 recommandations numérotées, chacune avec : un titre court, une explication de 2-3 phrases, et une action concrète à faire dans les 30 jours. Sois direct et précis. Format : [TITRE] [EXPLICATION] [ACTION 30J].`
 
