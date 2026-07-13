@@ -35,36 +35,29 @@ exports.handler = async (event) => {
     const authHeader = event.headers.authorization || event.headers.Authorization || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
     if (!token || !CHANTIER_ANON_KEY) {
-      console.log('gestion-properties: token ou CHANTIER_ANON_KEY manquant', { hasToken: !!token, hasAnonKey: !!CHANTIER_ANON_KEY });
       return { statusCode: 200, headers: cors, body: JSON.stringify({ properties: [] }) };
     }
 
     const userRes = await request('GET', CHANTIER_URL + '/auth/v1/user', {
       apikey: CHANTIER_ANON_KEY, Authorization: 'Bearer ' + token
     });
-    console.log('gestion-properties: userRes status', userRes.status, 'body', JSON.stringify(userRes.body).slice(0,200));
     const email = userRes.status === 200 ? userRes.body?.email : null;
     if (!email || !GESTION_SERVICE_KEY) {
-      console.log('gestion-properties: email ou GESTION_SERVICE_KEY manquant', { email, hasServiceKey: !!GESTION_SERVICE_KEY });
       return { statusCode: 200, headers: cors, body: JSON.stringify({ properties: [] }) };
     }
 
     const svcHeaders = { apikey: GESTION_SERVICE_KEY, Authorization: 'Bearer ' + GESTION_SERVICE_KEY };
     const listRes = await request('GET', GESTION_URL + '/auth/v1/admin/users?per_page=1000', svcHeaders);
-    console.log('gestion-properties: listRes status', listRes.status, 'nb users', listRes.body?.users?.length);
     const allUsers = listRes.body?.users || (Array.isArray(listRes.body) ? listRes.body : []);
     const gestionUser = allUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
     if (!gestionUser?.id) {
-      console.log('gestion-properties: aucun utilisateur Gestion trouve pour cet email', email);
       return { statusCode: 200, headers: cors, body: JSON.stringify({ properties: [] }) };
     }
-    console.log('gestion-properties: gestionUser trouve', gestionUser.id);
 
     const propsRes = await request('GET',
       GESTION_URL + '/rest/v1/properties?bailleur_id=eq.' + encodeURIComponent(gestionUser.id) + '&select=id,name,type,address,city,postal_code',
       svcHeaders
     );
-    console.log('gestion-properties: propsRes status', propsRes.status, 'body', JSON.stringify(propsRes.body).slice(0,300));
 
     // Récupérer les loyers réels (stockés dans leases.data.formData.rent,
     // reliés aux biens via units.property_id) pour calculer un vrai
