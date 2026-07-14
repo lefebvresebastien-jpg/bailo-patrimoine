@@ -285,10 +285,10 @@ input, select, textarea { font-family: var(--font); }
           Connecté
         </div>
         <div class="sidebar-modules">
-          <a class="mod-badge" href="https://gestion.bailo.pro" target="_blank">Gestion</a>
-          <a class="mod-badge" href="https://finance.bailo.pro" target="_blank">Finance</a>
-          <a class="mod-badge" href="https://chantier.bailo.pro" target="_blank">Chantier</a>
-          <a class="mod-badge" href="https://bnb.bailo.pro" target="_blank">Bnb</a>
+          <a class="mod-badge bn-cross-link" href="https://gestion.bailo.pro" target="_blank">Gestion</a>
+          <a class="mod-badge bn-cross-link" href="https://finance.bailo.pro" target="_blank">Finance</a>
+          <a class="mod-badge bn-cross-link" href="https://chantier.bailo.pro" target="_blank">Chantier</a>
+          <a class="mod-badge bn-cross-link" href="https://bnb.bailo.pro" target="_blank">Bnb</a>
         </div>
       </div>
     </div>
@@ -614,6 +614,25 @@ let _gestionProperties = [] // liste brute des biens Gestion (pont via fonction 
 let _loyersParBien = {} // loyers mensuels réels par property_id (calculés depuis les baux)
 let _currentUserId = null
 let _currentUserEmail = ''
+// Ajoute ?expect=<email> aux liens vers un autre module Bailo : le module cible
+// compare avec sa propre session en cache et force une reconnexion en cas de
+// désaccord (ex. un autre compte resté connecté sur ce navigateur), sans imposer
+// de reconnexion quand tout correspond déjà.
+const BAILO_CROSS_MODULES = ['finance.bailo.pro','chantier.bailo.pro','gestion.bailo.pro','bnb.bailo.pro','patrimoine.bailo.pro']
+function withExpect(url) {
+  try {
+    if (!_currentUserEmail) return url
+    const u = new URL(url)
+    if (BAILO_CROSS_MODULES.indexOf(u.hostname) === -1) return url
+    u.searchParams.set('expect', _currentUserEmail)
+    return u.toString()
+  } catch(e) { return url }
+}
+function patchCrossModuleLinks() {
+  document.querySelectorAll('a.bn-cross-link').forEach(function(a) {
+    a.href = withExpect(a.getAttribute('href'))
+  })
+}
 
 async function loadPatrimoineData(user) {
   _currentUserId = user.id
@@ -1456,6 +1475,7 @@ async function initApp(user) {
   document.getElementById('loading-screen').style.display = 'flex'
   document.getElementById('loading-screen').textContent = 'Chargement de vos données...'
   await loadPatrimoineData(user)
+  patchCrossModuleLinks()
   document.getElementById('loading-screen').style.display = 'none'
   renderDashboard()
   showToast('Bienvenue sur Bailo Patrimoine')
@@ -1470,7 +1490,32 @@ async function refreshData() {
 
 // INIT
 async function init() {
+  // Arrivée depuis un lien de navigation (landing ou un autre module) : ces liens
+  // transmettent l'email attendu (?expect=) car chaque module a son propre stockage
+  // de session, isolé par sous-domaine. On compare avec la session déjà en cache ;
+  // en cas de désaccord (ex. un autre compte resté connecté sur ce navigateur) ou
+  // d'absence de correspondance, on force une vraie reconnexion. Sinon (email
+  // identique, ou aucune indication), on ne rajoute aucune friction.
+  const params = new URLSearchParams(window.location.search)
+  const expect = params.get('expect')
+  const forceLogin = params.get('forcelogin') === '1'
+  const cleanUrl = function() {
+    params.delete('expect'); params.delete('forcelogin')
+    const u = window.location.pathname + (params.toString() ? '?' + params.toString() : '') + window.location.hash
+    window.history.replaceState({}, '', u)
+  }
   const { data: { session } } = await db.auth.getSession()
+  const mismatch = forceLogin || (expect && (!session || (session.user.email || '').toLowerCase() !== decodeURIComponent(expect).toLowerCase()))
+  if (expect || forceLogin) {
+    if (mismatch) {
+      if (session) { try { await db.auth.signOut() } catch(e) {} }
+      cleanUrl()
+      if (expect) { const el = document.getElementById('auth-email'); if (el) el.value = decodeURIComponent(expect) }
+      document.getElementById('loading-screen').style.display = 'none'; document.getElementById('auth-screen').style.display = 'flex'
+      return
+    }
+    cleanUrl()
+  }
   if (session) { initApp(session.user) }
   else { document.getElementById('loading-screen').style.display = 'none'; document.getElementById('auth-screen').style.display = 'flex' }
 }
