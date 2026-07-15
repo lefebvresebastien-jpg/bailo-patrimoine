@@ -948,9 +948,34 @@ function genererAlertes() {
   })
   const endettement = getTauxEndettement()
   if (endettement > 50) alertes.push({ type: 'red', text: `<b>Taux d'endettement élevé</b> : ${fmtPct(endettement)}. La banque peut refuser un nouveau crédit.` })
-  alertes.push({ type: 'amber', text: `<b>Fiscalité</b> : passez au régime réel pour économiser ~3 200 €/an d'impôts estimés.` })
-  alertes.push({ type: 'purple', text: `<b>Résidence principale</b> : la vente libère ~240 000 € nets et +1 280 €/mois de cash-flow.` })
-  alertes.push({ type: 'green', text: `<b>Patrimoine net</b> : ${fmt(getPatrimoineNet())} — progression estimée +38 000 €/an au rythme actuel.` })
+
+  // SÉCURITÉ (corrigé le 15/07/2026) : ces 3 alertes contenaient des chiffres
+  // en dur (dont une vraie estimation personnelle de Sébastien sur la vente
+  // de sa résidence principale), affichés à TOUS les comptes sans distinction.
+  // Remplacées par de vrais calculs à partir des données réelles de
+  // l'utilisateur connecté, et masquées quand la donnée nécessaire n'existe
+  // pas pour ce compte (plutôt que d'afficher un exemple générique chiffré).
+  const loyersAnnuels = getTotalLoyers() * 12
+  if (loyersAnnuels > 0) {
+    const chargesReelles = (getTotalCharges() - _data.biens.reduce((s,b) => s + b.credit, 0)) * 12
+    const interets = _data.biens.reduce((s,b) => s + b.credit * 0.3, 0) * 12
+    const economieFiscale = Math.round(Math.abs((loyersAnnuels * 0.7 * 0.17) - (Math.max(0, loyersAnnuels - chargesReelles - interets) * 0.17)))
+    if (economieFiscale > 100) {
+      alertes.push({ type: 'amber', text: `<b>Fiscalité</b> : passez au régime réel pour économiser ~${fmt(economieFiscale)}/an d'impôts estimés.` })
+    }
+  }
+
+  const rp = _data.biens.find(b => b.type === 'rp')
+  if (rp && rp.valeur_estimee > 0) {
+    const detteRestante = (rp.credit || 0) * (rp.duree_credit_restante || 0) * 12
+    const netVente = Math.max(0, rp.valeur_estimee - detteRestante)
+    if (netVente > 0) {
+      alertes.push({ type: 'purple', text: `<b>Résidence principale</b> : la vente libère ~${fmt(netVente)} nets et +${fmt(rp.credit || 0)}/mois de cash-flow.` })
+    }
+  }
+
+  const cfAnnuel = locatifs.reduce((s, b) => s + getCashflow(b), 0) * 12
+  alertes.push({ type: 'green', text: `<b>Patrimoine net</b> : ${fmt(getPatrimoineNet())}${cfAnnuel !== 0 ? ` — cash-flow locatif estimé ${cfAnnuel > 0 ? '+' : ''}${fmt(cfAnnuel)}/an` : ''}.` })
   return alertes
 }
 
@@ -1278,8 +1303,16 @@ function initSimulation() {
       if (b.type === 'rp') { opt.textContent += ' (résidence principale)'; opt.selected = true }
       sel.appendChild(opt)
     })
-    document.getElementById('sim-prix').value = 480000
-    document.getElementById('sim-crd').value = 240000
+    // SÉCURITÉ (corrigé le 15/07/2026) : ces champs étaient préremplis avec
+    // des chiffres en dur (480000/240000, les vrais chiffres personnels de
+    // Sébastien) pour TOUS les comptes. Préremplissage désormais basé sur
+    // la résidence principale réelle de l'utilisateur connecté si elle
+    // existe, sinon champs vides.
+    const rp = _data.biens.find(b => b.type === 'rp') || _data.biens[0]
+    if (rp) {
+      document.getElementById('sim-prix').value = rp.valeur_estimee || ''
+      document.getElementById('sim-crd').value = Math.round((rp.credit || 0) * (rp.duree_credit_restante || 0) * 12) || ''
+    }
     updateSimulation()
   }
 }
