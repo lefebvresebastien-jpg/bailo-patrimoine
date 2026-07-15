@@ -829,21 +829,35 @@ function getValeurTotale() { return _data.biens.reduce((s, b) => s + b.valeur_es
 function getTotalCredit() { return _data.biens.reduce((s, b) => s + b.credit, 0) }
 function getTauxEndettement() {
   const revenus = (_data.revenus_perso.salaire + _data.revenus_perso.autre) + getTotalLoyers() * 0.7
+  if (revenus <= 0) return 0
   return (getTotalCredit() / revenus) * 100
 }
 function getRendement() {
   const loyers = getTotalLoyers() * 12
   const valeur = _data.biens.filter(b => b.type !== 'rp').reduce((s, b) => s + b.valeur_estimee, 0)
+  if (valeur <= 0) return 0
   return (loyers / valeur) * 100
 }
 
 // SCORE
 function calcScore() {
-  let score = 0
-  const cf = _data.biens.filter(b => b.type !== 'rp').reduce((s, b) => s + getCashflow(b), 0)
+  const locatifs = _data.biens.filter(b => b.type !== 'rp')
+  // CORRIGÉ (15/07/2026) : sans aucun bien locatif, endettement et rendement
+  // valaient NaN (division par zéro), et les comparaisons "NaN < seuil"
+  // étant toujours fausses en JS, le calcul tombait systématiquement sur la
+  // pire branche de chaque critère (ex. 5/25 endettement, 8/25 rendement)
+  // au lieu de 0 — donnant un score trompeur (13/100 "Profil à
+  // restructurer") à n'importe quel compte flambant neuf sans bien. On
+  // traite maintenant ce cas explicitement : pas de score calculable tant
+  // qu'aucun bien locatif n'est enregistré.
+  if (locatifs.length === 0) {
+    return { total: 0, cf: 0, endettement: 0, rendement: 0, pv: 0, empty: true }
+  }
+
+  const cf = locatifs.reduce((s, b) => s + getCashflow(b), 0)
   const endettement = getTauxEndettement()
   const rendement = getRendement()
-  const pv = _data.biens.filter(b => b.type !== 'rp').reduce((s, b) => s + (b.valeur_estimee - b.valeur_achat), 0)
+  const pv = locatifs.reduce((s, b) => s + (b.valeur_estimee - b.valeur_achat), 0)
 
   const scoreCf = cf > 2000 ? 25 : cf > 0 ? Math.round(cf / 2000 * 25) : 0
   const scoreEndettement = endettement < 35 ? 25 : endettement < 50 ? 18 : endettement < 65 ? 10 : 5
@@ -920,9 +934,9 @@ function renderDashboard() {
 
   // Score
   const score = calcScore()
-  document.getElementById('score-num').textContent = score.total
-  const grade = score.total >= 80 ? 'Excellent profil investisseur' : score.total >= 65 ? 'Bon profil investisseur' : score.total >= 50 ? 'Profil à optimiser' : 'Profil à restructurer'
-  document.getElementById('score-grade').textContent = '/ 100 — ' + grade
+  document.getElementById('score-num').textContent = score.empty ? '—' : score.total
+  const grade = score.empty ? 'Ajoutez un bien locatif pour calculer votre score' : score.total >= 80 ? 'Excellent profil investisseur' : score.total >= 65 ? 'Bon profil investisseur' : score.total >= 50 ? 'Profil à optimiser' : 'Profil à restructurer'
+  document.getElementById('score-grade').textContent = score.empty ? grade : '/ 100 — ' + grade
   document.getElementById('score-bars').innerHTML = [
     ['Cash-flow', score.cf, 25, '#34d399'],
     ['Endettement', score.endettement, 25, '#6c63ff'],
