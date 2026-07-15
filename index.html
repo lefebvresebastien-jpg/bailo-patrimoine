@@ -700,6 +700,15 @@ async function loadPatrimoineData(user) {
     })
   })
   _data.biens = biens
+  // SÉCURITÉ (corrigé le 15/07/2026) : ce badge était figé en dur à "3"
+  // dans le HTML pour tous les comptes. Reflète maintenant le vrai nombre
+  // de biens locatifs (hors résidence principale) du compte connecté.
+  const pvBadge = document.getElementById('pv-badge')
+  if (pvBadge) {
+    const nbLocatifs = biens.filter(b => b.type !== 'rp').length
+    pvBadge.textContent = nbLocatifs
+    pvBadge.style.display = nbLocatifs > 0 ? '' : 'none'
+  }
 }
 
 async function savePatrimoineDetail(payload) {
