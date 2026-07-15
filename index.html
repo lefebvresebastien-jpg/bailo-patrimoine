@@ -1122,13 +1122,19 @@ function renderCashflow() {
 
   destroyChart('cf-evolution')
   const months = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']
+  // CORRIGÉ (15/07/2026) : cette courbe générait une variation aléatoire
+  // (Math.random()) autour de la valeur actuelle, donnant l'illusion d'un
+  // vrai historique mensuel qui n'existe pas — trompeur, même à 0€ ça
+  // faisait osciller la courbe sans raison. On n'a pas d'historique réel
+  // mois par mois, donc on affiche une ligne plate au vrai cash-flow
+  // actuel plutôt que d'inventer une variation fictive.
   _charts['cf-evolution'] = new Chart(document.getElementById('chart-cf-evolution'), {
     type: 'line',
     data: {
       labels: months,
       datasets: [{
         label: 'Cash-flow',
-        data: months.map(() => Math.round(cf + (Math.random() - 0.5) * 300)),
+        data: months.map(() => Math.round(cf)),
         borderColor: '#6c63ff', backgroundColor: 'rgba(108,99,255,.08)', fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#6c63ff'
       }]
     },
