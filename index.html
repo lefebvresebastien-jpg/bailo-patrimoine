@@ -436,7 +436,7 @@ input, select, textarea { font-family: var(--font); }
               <div id="cf-detail"></div>
             </div>
             <div class="card">
-              <div class="card-header"><span class="card-title">Évolution cash-flow sur 12 mois</span></div>
+              <div class="card-header"><span class="card-title">Cash-flow cumulé sur 12 mois</span></div>
               <div class="chart-container"><canvas id="chart-cf-evolution"></canvas></div>
             </div>
           </div>
@@ -1122,20 +1122,19 @@ function renderCashflow() {
 
   destroyChart('cf-evolution')
   const months = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']
-  // CORRIGÉ (15/07/2026) : cette courbe générait une variation aléatoire
-  // (Math.random()) autour de la valeur actuelle, donnant l'illusion d'un
-  // vrai historique mensuel qui n'existe pas — trompeur, même à 0€ ça
-  // faisait osciller la courbe sans raison. On n'a pas d'historique réel
-  // mois par mois, donc on affiche une ligne plate au vrai cash-flow
-  // actuel plutôt que d'inventer une variation fictive.
+  // AMÉLIORÉ (15/07/2026) : plus de valeur aléatoire (Math.random), ni de
+  // ligne plate peu informative. On n'a pas d'historique mensuel réel, mais
+  // on peut montrer une donnée réelle et utile : le cash-flow CUMULÉ sur
+  // 12 mois (combien s'accumule ou se creuse au fil de l'année au rythme
+  // actuel), calculée directement à partir du vrai cash-flow du compte.
   _charts['cf-evolution'] = new Chart(document.getElementById('chart-cf-evolution'), {
     type: 'line',
     data: {
       labels: months,
       datasets: [{
-        label: 'Cash-flow',
-        data: months.map(() => Math.round(cf)),
-        borderColor: '#6c63ff', backgroundColor: 'rgba(108,99,255,.08)', fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#6c63ff'
+        label: 'Cash-flow cumulé',
+        data: months.map((_, i) => Math.round(cf * (i + 1))),
+        borderColor: '#6c63ff', backgroundColor: 'rgba(108,99,255,.08)', fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#6c63ff'
       }]
     },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#2a2d3a' }, ticks: { color: '#6b7280', font: { size: 11 } } }, y: { grid: { color: '#2a2d3a' }, ticks: { color: '#6b7280', font: { size: 11 }, callback: v => v + ' €' } } } }
