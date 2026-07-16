@@ -718,6 +718,16 @@ async function savePatrimoineDetail(payload) {
   return !error
 }
 
+// AJOUTÉ (15/07/2026, retour client Kevin Olivier) : aucun moyen de
+// supprimer un bien ajouté manuellement (ex. doublon créé avant que la
+// synchro automatique depuis Gestion n'existe). Uniquement pour les biens
+// "personnels" (sans property_id, donc pas synchronisés depuis Gestion) —
+// un bien synchronisé se gère depuis Gestion lui-même, pas depuis ici.
+async function deletePatrimoineDetail(detailId) {
+  const { error } = await db.from('patrimoine_details').delete().eq('id', detailId).eq('user_id', _currentUserId)
+  return !error
+}
+
 async function savePatrimoineProfil() {
   const { error } = await db.from('patrimoine_profil').upsert({
     user_id: _currentUserId,
@@ -751,6 +761,8 @@ function openBienModal(bienId) {
   document.getElementById('bien-modal-tf').value = b?.tf || ''
   document.getElementById('bien-modal-assurance').value = b?.assurance || ''
   document.getElementById('bien-modal-charges').value = b?.charges || ''
+  const delBtn = document.getElementById('bien-modal-delete')
+  delBtn.style.display = (!isGestionBien && _bienModalTarget._detailId) ? 'block' : 'none'
   document.getElementById('bien-modal').style.display = 'flex'
 }
 
@@ -784,6 +796,18 @@ async function saveBienModal() {
   await loadPatrimoineData(session.user)
   renderDashboard()
   showToast('Bien enregistré')
+}
+
+async function supprimerBienModal() {
+  if (!_bienModalTarget || !_bienModalTarget._detailId) return
+  if (!confirm('Supprimer ce bien ? Cette action est définitive.')) return
+  const ok = await deletePatrimoineDetail(_bienModalTarget._detailId)
+  if (!ok) { showToast('Erreur lors de la suppression'); return }
+  closeBienModal()
+  const { data: { session } } = await db.auth.getSession()
+  await loadPatrimoineData(session.user)
+  renderDashboard()
+  showToast('Bien supprimé')
 }
 
 // MODALE PROFIL
@@ -1650,6 +1674,7 @@ init()
       </div>
     </div>
     <button class="btn btn-primary" style="width:100%" onclick="saveBienModal()">Enregistrer</button>
+    <button id="bien-modal-delete" style="display:none;width:100%;margin-top:8px;background:none;border:1px solid var(--red,#e5484d);color:var(--red,#e5484d);border-radius:8px;padding:10px;cursor:pointer;font-size:13px" onclick="supprimerBienModal()">🗑 Supprimer ce bien</button>
   </div>
 </div>
 
