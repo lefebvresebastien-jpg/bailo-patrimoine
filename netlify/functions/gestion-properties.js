@@ -79,12 +79,24 @@ exports.handler = async (event) => {
         svcHeaders
       );
       const leases = Array.isArray(leasesRes.body) ? leasesRes.body : [];
+      // CORRIGÉ (15/07/2026, retour client Kevin Olivier) : additionnait le
+      // loyer de TOUS les baux (actifs, brouillons, résiliés) pour un même
+      // bien, alors que le tableau de bord Gestion lui-même ne compte que
+      // les baux "actif" dans ses totaux — ça créait un écart de loyer
+      // entre Gestion et Patrimoine dès qu'un bien avait plus d'un bail
+      // (ancien locataire + nouveau, brouillon jamais finalisé, etc.).
+      // Même logique que la fonction leaseStatus() de bailo-gestion-v2 :
+      // vide ou "actif"/"active" = actif ; "terminé"/"ended" = résilié ;
+      // tout le reste (ex. "Brouillon") = brouillon, exclu du calcul.
       leases.forEach(l => {
-        const propId = unitToProperty[l.unit_id];
-        if (!propId) return;
-        const rent = parseFloat(l.data?.formData?.rent) || 0;
-        loyersParBien[propId] = (loyersParBien[propId] || 0) + rent;
-      });
+        const propId = unitToProperty[l.unit_id]
+        if (!propId) return
+        const raw = (l.data?.formData?.leaseStatus || '').toLowerCase()
+        const isActive = raw === '' || raw === 'actif' || raw === 'active'
+        if (!isActive) return
+        const rent = parseFloat(l.data?.formData?.rent) || 0
+        loyersParBien[propId] = (loyersParBien[propId] || 0) + rent
+      })
     }
 
     return { statusCode: 200, headers: cors, body: JSON.stringify({ properties, loyersParBien }) };
