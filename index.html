@@ -685,6 +685,10 @@ async function loadPatrimoineData(user) {
       duree_credit_restante: d?.duree_credit_restante || 0,
       color: d?.color || '#6c63ff',
       icon: d?.icon || 'ti-building-skyscraper',
+      banque_nom: d?.banque_nom || '',
+      banque_notes: d?.banque_notes || '',
+      assurance_nom: d?.assurance_nom || '',
+      assurance_notes: d?.assurance_notes || '',
       _detailId: d?.id || null,
       _incomplet: !d
     })
@@ -696,6 +700,8 @@ async function loadPatrimoineData(user) {
       valeur_achat: d.valeur_achat || 0, valeur_estimee: d.valeur_estimee || 0, annee_achat: d.annee_achat,
       loyers: 0, credit: d.credit || 0, tf: d.tf || 0, assurance: d.assurance || 0, charges: d.charges || 0,
       duree_credit_restante: d.duree_credit_restante || 0, color: d.color || '#9ca3af', icon: d.icon || 'ti-home-2',
+      banque_nom: d.banque_nom || '', banque_notes: d.banque_notes || '',
+      assurance_nom: d.assurance_nom || '', assurance_notes: d.assurance_notes || '',
       _detailId: d.id, _incomplet: false
     })
   })
@@ -761,6 +767,10 @@ function openBienModal(bienId) {
   document.getElementById('bien-modal-tf').value = b?.tf || ''
   document.getElementById('bien-modal-assurance').value = b?.assurance || ''
   document.getElementById('bien-modal-charges').value = b?.charges || ''
+  document.getElementById('bien-modal-banque-nom').value = b?.banque_nom || ''
+  document.getElementById('bien-modal-banque-notes').value = b?.banque_notes || ''
+  document.getElementById('bien-modal-assurance-nom').value = b?.assurance_nom || ''
+  document.getElementById('bien-modal-assurance-notes').value = b?.assurance_notes || ''
   const delBtn = document.getElementById('bien-modal-delete')
   delBtn.style.display = (!isGestionBien && _bienModalTarget._detailId) ? 'block' : 'none'
   document.getElementById('bien-modal').style.display = 'flex'
@@ -786,7 +796,11 @@ async function saveBienModal() {
     credit: parseFloat(document.getElementById('bien-modal-credit').value) || 0,
     tf: parseFloat(document.getElementById('bien-modal-tf').value) || 0,
     assurance: parseFloat(document.getElementById('bien-modal-assurance').value) || 0,
-    charges: parseFloat(document.getElementById('bien-modal-charges').value) || 0
+    charges: parseFloat(document.getElementById('bien-modal-charges').value) || 0,
+    banque_nom: document.getElementById('bien-modal-banque-nom').value.trim(),
+    banque_notes: document.getElementById('bien-modal-banque-notes').value.trim(),
+    assurance_nom: document.getElementById('bien-modal-assurance-nom').value.trim(),
+    assurance_notes: document.getElementById('bien-modal-assurance-notes').value.trim()
   }
   if (!payload.id) delete payload.id
   const ok = await savePatrimoineDetail(payload)
@@ -1115,6 +1129,10 @@ function renderBiens() {
           <div style="font-size:11px;color:var(--muted);margin-top:2px">${fmt(b.credit)}/mois</div>
         </div>
       </div>
+      ${(b.banque_nom || b.assurance_nom) ? `<div style="display:flex;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border,#2a2d3a);font-size:12px;color:var(--muted)">
+        ${b.banque_nom ? `<div><i class="ti ti-building-bank"></i> ${b.banque_nom}${b.banque_notes ? ' — ' + b.banque_notes : ''}</div>` : ''}
+        ${b.assurance_nom ? `<div><i class="ti ti-shield-check"></i> ${b.assurance_nom}${b.assurance_notes ? ' — ' + b.assurance_notes : ''}</div>` : ''}
+      </div>` : ''}
     </div>`
   }).join('')
 }
@@ -1671,6 +1689,29 @@ init()
       <div>
         <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Autres charges (€/mois)</label>
         <input id="bien-modal-charges" type="number" class="auth-input" style="margin-bottom:0">
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--border,#2a2d3a);margin:16px 0;padding-top:16px">
+      <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:10px">Banque &amp; assurance (utile si plusieurs établissements)</div>
+      <div class="form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div>
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Nom de la banque</label>
+          <input id="bien-modal-banque-nom" type="text" class="auth-input" style="margin-bottom:0" placeholder="Ex. Crédit Agricole">
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Nom de l'assurance</label>
+          <input id="bien-modal-assurance-nom" type="text" class="auth-input" style="margin-bottom:0" placeholder="Ex. MAIF">
+        </div>
+      </div>
+      <div class="form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Notes banque (réf. dossier, contact...)</label>
+          <textarea id="bien-modal-banque-notes" class="auth-input" style="margin-bottom:0;min-height:60px;resize:vertical"></textarea>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Notes assurance (n° contrat, contact...)</label>
+          <textarea id="bien-modal-assurance-notes" class="auth-input" style="margin-bottom:0;min-height:60px;resize:vertical"></textarea>
+        </div>
       </div>
     </div>
     <button class="btn btn-primary" style="width:100%" onclick="saveBienModal()">Enregistrer</button>
